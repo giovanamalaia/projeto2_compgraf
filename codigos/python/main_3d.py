@@ -97,9 +97,12 @@ def initialize(win):
 
     white = Material(1.0, 1.0, 1.0)
     white.SetShininess(10.0)
-
+    
     sun_material = Material(3.0, 3.0, 3.0)
     sun_material.SetShininess(50.0)
+
+    space_material = Material(1.0, 1.0, 1.0) 
+    space_material.SetShininess(1.0)
 
     def make_shader():
         shd = Shader(light, "world")
@@ -112,6 +115,7 @@ def initialize(win):
     shd_earth = make_shader()
     shd_moon = make_shader()
     shd_mercury = make_shader()
+    shd_space = make_shader()
 
     sphere = Sphere()
 
@@ -120,6 +124,7 @@ def initialize(win):
         earth_tex = Texture("uTexture", "codigos/python/images/earth2.jpg")
         moon_tex = Texture("uTexture", "codigos/python/images/moon.jpg")
         mercury_tex = Texture("uTexture", "codigos/python/images/mercury.jpg")
+        space_tex = Texture("uTexture", "codigos/python/images/space.jpg")
     except Exception as e:
         print(f"Erro ao carregar texturas: {e}")
         glfw.terminate()
@@ -157,7 +162,7 @@ def initialize(win):
     trf_earth_translate.Translate(5.0, 0, 0)
 
     trf_earth_spin = Transform()
-    earth_spin_engine = SpinEngine3D(trf_earth_spin, 2.0, glm.vec3(0.6, 0.6, 0.6), glm.vec3(0, 1, 0.1))
+    earth_spin_engine = SpinEngine3D(trf_earth_spin, 0.2, glm.vec3(0.6, 0.6, 0.6), glm.vec3(0, 1, 0.1))
     g_animation_engines.append(earth_spin_engine)
 
     trf_moon_orbit = Transform()
@@ -170,6 +175,13 @@ def initialize(win):
     trf_moon_spin = Transform()
     moon_spin_engine = SpinEngine3D(trf_moon_spin, 0.0, glm.vec3(0.3, 0.3, 0.3))
     g_animation_engines.append(moon_spin_engine)
+
+    trf_space = Transform()
+    trf_space.Scale(100.0, 100.0, 100.0)
+    skybox_root = Node(shd_space, trf_space, [space_material, space_tex], [sphere])
+
+    global scene_skybox
+    scene_skybox = Scene(skybox_root)
 
     root = Node(shd_sun,
                 nodes=[
@@ -213,10 +225,18 @@ def initialize(win):
 
 
 def display(win):
+    global scene_skybox 
     global scene
     global camera
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    scene.Render(camera)
+    glDepthMask(GL_FALSE)      
+    glDisable(GL_CULL_FACE)   
+    scene_skybox.Render(camera) 
+    glEnable(GL_CULL_FACE)    
+    glDepthMask(GL_TRUE)       
+    glClear(GL_DEPTH_BUFFER_BIT) 
+    
+    scene.Render(camera)       
 
 def keyboard(win, key, scancode, action, mods):
     if key == glfw.KEY_Q and action == glfw.PRESS:
