@@ -1,3 +1,4 @@
+
 import glfw
 from OpenGL.GL import *
 from OpenGL.GL.shaders import *
@@ -127,23 +128,29 @@ def initialize(win):
     global g_animation_engines
     g_animation_engines.clear()
 
-    trf_sun = Transform()
-    trf_sun.LoadIdentity()
-    trf_sun.Scale(1.5, 1.5, 1.5)
+    trf_sun = Transform() 
+
+    sun_spin_engine = SpinEngine3D(
+        trf_sun,                  
+        0.1,                     
+        glm.vec3(1.5, 1.5, 1.5),  
+        glm.vec3(0, 1, 0.1)     
+    )
+    g_animation_engines.append(sun_spin_engine)
 
     trf_mercury_orbit = Transform()
-    mercury_orbit_engine = OrbitEngine3D(trf_mercury_orbit, 1.5)
+    mercury_orbit_engine = OrbitEngine3D(trf_mercury_orbit, 0.8)
     g_animation_engines.append(mercury_orbit_engine)
 
     trf_mercury_translate = Transform()
     trf_mercury_translate.Translate(3.0, 0, 0)
 
     trf_mercury_spin = Transform()
-    mercury_spin_engine = SpinEngine3D(trf_mercury_spin, 0.5, glm.vec3(0.4, 0.4, 0.4))
+    mercury_spin_engine = SpinEngine3D(trf_mercury_spin, 0.2, glm.vec3(0.4, 0.4, 0.4))
     g_animation_engines.append(mercury_spin_engine)
 
     trf_earth_orbit = Transform()
-    earth_orbit_engine = OrbitEngine3D(trf_earth_orbit, 0.5)
+    earth_orbit_engine = OrbitEngine3D(trf_earth_orbit, 0.3)
     g_animation_engines.append(earth_orbit_engine)
 
     trf_earth_translate = Transform()
@@ -154,7 +161,7 @@ def initialize(win):
     g_animation_engines.append(earth_spin_engine)
 
     trf_moon_orbit = Transform()
-    moon_orbit_engine = OrbitEngine3D(trf_moon_orbit, 1.2)
+    moon_orbit_engine = OrbitEngine3D(trf_moon_orbit, -1.2)
     g_animation_engines.append(moon_orbit_engine)
 
     trf_moon_translate = Transform()
@@ -177,19 +184,17 @@ def initialize(win):
                                            )
                                   ]
                                   ),
-                             Node(None, trf_earth_orbit,
+                             Node(None, trf_earth_orbit, 
                                   nodes=[
-                                      Node(None, trf_earth_translate,
+                                      Node(None, trf_earth_translate, 
                                            nodes=[
-                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere],
+                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere]), 
+
+                                               Node(None, trf_moon_orbit, 
                                                     nodes=[
-                                                        Node(None, trf_moon_orbit,
+                                                        Node(None, trf_moon_translate, 
                                                              nodes=[
-                                                                 Node(None, trf_moon_translate,
-                                                                      nodes=[
-                                                                          Node(shd_moon, trf_moon_spin, [white, moon_tex], [sphere])
-                                                                      ]
-                                                                      )
+                                                                 Node(shd_moon, trf_moon_spin, [white, moon_tex], [sphere]) 
                                                              ]
                                                              )
                                                     ]
