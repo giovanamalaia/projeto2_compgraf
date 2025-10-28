@@ -148,7 +148,7 @@ def initialize(win):
     g_animation_engines.append(mercury_orbit_engine)
 
     trf_mercury_translate = Transform()
-    trf_mercury_translate.Translate(3.0, 0, 0)
+    trf_mercury_translate.Translate(2.5, 0, 0)
 
     trf_mercury_spin = Transform()
     mercury_spin_engine = SpinEngine3D(trf_mercury_spin, 0.2, glm.vec3(0.4, 0.4, 0.4))
