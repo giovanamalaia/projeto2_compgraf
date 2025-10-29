@@ -61,26 +61,24 @@ class SpinEngine3D:
         self.transform.Rotate(self.angle, self.axis.x, self.axis.y, self.axis.z)
 
 class EarthMoonCameraEngine:
-    def __init__(self, camera, earth_transform, moon_transform):
+    def __init__(self, camera, earth_node, moon_node):
         self.camera = camera
-        self.earth_transform = earth_transform
-        self.moon_transform = moon_transform
+        self.earth_node = earth_node
+        self.moon_node = moon_node
 
     def update(self):
-        # obtém posição da Terra e da Lua
-        earth_mat = self.earth_transform.GetMatrix()
-        moon_mat = self.moon_transform.GetMatrix()
+        earth_mat = self.earth_node.GetGlobalTransform()
+        moon_mat = self.moon_node.GetGlobalTransform()
+
         earth_pos = glm.vec3(earth_mat[3][0], earth_mat[3][1], earth_mat[3][2])
         moon_pos = glm.vec3(moon_mat[3][0], moon_mat[3][1], moon_mat[3][2])
 
-        # vetor da Terra para a Lua
+        # posição da câmera atrás da Terra, na direção oposta à Lua
         direction = glm.normalize(moon_pos - earth_pos)
+        camera_pos = earth_pos - direction * 3.0 + glm.vec3(0.0, 1.0, 0.0)
 
-        # posiciona a câmera um pouco atrás da Terra, olhando para a Lua
-        camera_pos = earth_pos - direction * 3.0 + glm.vec3(0.0, 1.0, 0.0)  # elevação opcional
         self.camera.SetPosition(camera_pos.x, camera_pos.y, camera_pos.z)
         self.camera.LookAt(moon_pos)
-
 
 
 def update_scene():
@@ -140,7 +138,8 @@ def keyboard(win, key, scancode, action, mods):
 
 # === Inicialização da cena ===
 def initialize(win):
-    global camera_global, camera_earth_moon, shd_sun, shd_mercury, shd_space, shd_earth, shd_moon, light
+    global camera_global, camera_earth_moon
+    global shd_sun, shd_mercury, shd_space, shd_earth, shd_moon, light
     global earth_moon_cam_engine, scene_skybox, scene
 
     glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -149,7 +148,7 @@ def initialize(win):
 
     # câmeras
     camera_global = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)
-    camera_earth_moon = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)  # inicial, será atualizado pela engine
+    camera_earth_moon = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)
 
     # luz global
     light = Light(0.0, 0.0, 0.0, 1.0, "world")
@@ -170,30 +169,19 @@ def initialize(win):
         shd.Link()
         return shd
 
-    # def make_bump_shader():
-    #     shd = Shader(light, "world")
-    #     shd.AttachVertexShader("codigos/python/shaders/ilum_vert/vertex_bump.glsl")
-    #     shd.AttachFragmentShader("codigos/python/shaders/ilum_vert/fragment_bump.glsl")
-    #     shd.Link()
-    #     return shd
-
     shd_sun = make_shader()
     shd_earth = make_shader()
     shd_moon = make_shader()
     shd_mercury = make_shader()
     shd_space = make_shader()
-    # shd_earth = make_bump_shader()
-    # shd_moon = make_bump_shader()
-    
+
     # texturas
     try:
         sun_tex = Texture("uTexture", "codigos/python/images/sun.jpg")
         mercury_tex = Texture("uTexture", "codigos/python/images/mercury.jpg")
         space_tex = Texture("uTexture", "codigos/python/images/space.jpg")
         earth_tex = Texture("uTexture", "codigos/python/images/earth2.jpg")
-        # earth_normal = Texture("uNormalMap", "codigos/python/images/earth_normal.jpg")
         moon_tex = Texture("uTexture", "codigos/python/images/moon.jpg")
-        # moon_normal = Texture("uNormalMap", "codigos/python/images/moon_normal.jpg")
     except Exception as e:
         print(f"Erro ao carregar texturas: {e}")
         glfw.terminate()
@@ -226,11 +214,6 @@ def initialize(win):
     trf_space = Transform(); trf_space.Scale(100.0, 100.0, 100.0)
     scene_skybox = Scene(Node(shd_space, trf_space, [space_material, space_tex], [Sphere()]))
 
-    # inicializa shaders com uHasNormalMap
-    # for sh, val in [(shd_sun, False), (shd_mercury, False), (shd_space, False), (shd_earth, True), (shd_moon, True)]:
-    #     sh.UseProgram()
-    #     sh.SetUniformBool("uHasNormalMap", val)
-
     # construção da cena
     sphere = Sphere()
     root = Node(shd_sun,
@@ -250,13 +233,12 @@ def initialize(win):
                                   nodes=[
                                       Node(None, trf_earth_translate, 
                                            nodes=[
-                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere]), 
-
+                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere], name="Earth"), 
                                                Node(None, trf_moon_orbit, 
                                                     nodes=[
                                                         Node(None, trf_moon_translate, 
                                                              nodes=[
-                                                                 Node(shd_moon, trf_moon_spin, [white, moon_tex], [sphere]) 
+                                                                 Node(shd_moon, trf_moon_spin, [white, moon_tex], [sphere], name="Moon")
                                                              ]
                                                              )
                                                     ]
@@ -272,7 +254,15 @@ def initialize(win):
     scene = Scene(root)
 
     # engine da câmera Terra-Lua
-    earth_moon_cam_engine = EarthMoonCameraEngine(camera_earth_moon, trf_earth_translate, trf_moon_translate)
+    earth_node = root.FindNodeByName("Earth")
+    moon_node  = root.FindNodeByName("Moon")
+
+    if earth_node is None or moon_node is None:
+        print("Erro: não foi possível encontrar os nodes da Terra ou Lua!")
+        glfw.terminate()
+        sys.exit()
+
+    earth_moon_cam_engine = EarthMoonCameraEngine(camera_earth_moon, earth_node, moon_node)
 
 # === Função main ===
 def main():
