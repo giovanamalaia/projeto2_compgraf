@@ -82,3 +82,11 @@ class Camera3D (Camera):
       mat = glm.inverse(self.GetViewMatrix())
       cpos = mat * cpos
     shd.SetUniform("cpos",cpos)
+  
+
+  def SetPosition(self, x, y, z):
+    self.eye = glm.vec3(x, y, z)
+  def LookAt(self, target):
+    self.center = glm.vec3(target.x, target.y, target.z)
+  def GetPosition(self):
+    return self.eye
