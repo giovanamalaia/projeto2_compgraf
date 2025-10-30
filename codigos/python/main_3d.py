@@ -28,10 +28,9 @@ scene = None
 
 # Câmeras
 viewer_pos = glm.vec3(0.0, 10.0, 15.0)
-active_camera = 0  # 0 = global, 1 = Terra-Lua
 camera_global = None
-camera_earth_moon = None
-earth_moon_cam_engine = None
+camera_earth = None
+active_camera = 0  # 0 = global, 1 = Terra
 
 # === Engines de animação ===
 class OrbitEngine3D:
@@ -60,61 +59,17 @@ class SpinEngine3D:
         self.transform.Scale(self.scale.x, self.scale.y, self.scale.z)
         self.transform.Rotate(self.angle, self.axis.x, self.axis.y, self.axis.z)
 
-class EarthMoonCameraEngine:
-    def __init__(self, camera, earth_node, moon_node):
-        self.camera = camera
-        self.earth_node = earth_node
-        self.moon_node = moon_node
-
-    def update(self):
-        earth_mat = self.earth_node.GetGlobalTransform()
-        moon_mat = self.moon_node.GetGlobalTransform()
-
-        earth_pos = glm.vec3(earth_mat[3][0], earth_mat[3][1], earth_mat[3][2])
-        moon_pos = glm.vec3(moon_mat[3][0], moon_mat[3][1], moon_mat[3][2])
-
-        # posição da câmera atrás da Terra, na direção oposta à Lua
-        direction = glm.normalize(moon_pos - earth_pos)
-        camera_pos = earth_pos - direction * 3.0 + glm.vec3(0.0, 1.0, 0.0)
-
-        self.camera.SetPosition(camera_pos.x, camera_pos.y, camera_pos.z)
-        self.camera.LookAt(moon_pos)
-
-
+# === Atualização da cena ===
 def update_scene():
     for engine in g_animation_engines:
         engine.update()
-    if active_camera == 1 and earth_moon_cam_engine is not None:
-        earth_moon_cam_engine.update()
 
+# === Renderização ===
 def display(win):
-    global scene_skybox, scene, camera_global, camera_earth_moon, active_camera
-    global shd_sun, shd_mercury, shd_space, shd_earth, shd_moon, light, viewer_pos
+    global scene_skybox, scene, camera_global, camera_earth, active_camera
 
-    # seleciona a câmera ativa
-    current_camera = camera_global if active_camera == 0 else camera_earth_moon
+    current_camera = camera_global if active_camera == 0 else camera_earth
 
-    # atualizar uniforms dependentes da câmera e da luz
-    light_pos = glm.vec3(0.0, 0.0, 0.0)
-
-    # usamos viewer_pos ou o próprio vetor interno da câmera
-    # se a câmera ativa for Terra-Lua, ela já atualiza sua posição via engine
-    if active_camera == 0:
-        view_pos = viewer_pos
-    else:
-        # para a Terra-Lua, usamos GetViewVector() ou vetor interno
-        # supondo que Camera3D tenha atributo interno self.pos ou método SetPosition usado na engine
-        view_pos = current_camera.GetPosition() if hasattr(current_camera, 'GetPosition') else viewer_pos
-
-
-    for sh in (shd_sun, shd_mercury, shd_space, shd_earth, shd_moon):
-        if sh is None:
-            continue
-        sh.UseProgram()
-        sh.SetUniform("uLightPos", light_pos)
-        sh.SetUniform("uViewPos", view_pos)
-
-    # renderização do skybox
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     glDepthMask(GL_FALSE)
     glDisable(GL_CULL_FACE)
@@ -124,7 +79,6 @@ def display(win):
     glDepthMask(GL_TRUE)
     glClear(GL_DEPTH_BUFFER_BIT)
 
-    # renderização da cena principal
     if scene is not None:
         scene.Render(current_camera)
 
@@ -134,32 +88,24 @@ def keyboard(win, key, scancode, action, mods):
     if key == glfw.KEY_Q and action == glfw.PRESS:
         glfw.set_window_should_close(win, glfw.TRUE)
     if key == glfw.KEY_C and action == glfw.PRESS:
-        active_camera = 1 - active_camera  # alterna câmeras
+        active_camera = 1 - active_camera  # alterna entre global e Terra
 
 # === Inicialização da cena ===
 def initialize(win):
-    global camera_global, camera_earth_moon
-    global shd_sun, shd_mercury, shd_space, shd_earth, shd_moon, light
-    global earth_moon_cam_engine, scene_skybox, scene
+    global camera_global, camera_earth, light, scene_skybox, scene
+    global shd_sun, shd_mercury, shd_space, shd_earth, shd_moon
 
     glClearColor(0.0, 0.0, 0.0, 1.0)
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_CULL_FACE)
 
-    # câmeras
-    camera_global = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)
-    camera_earth_moon = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)
-
     # luz global
     light = Light(0.0, 0.0, 0.0, 1.0, "world")
 
     # materiais
-    white = Material(1.0, 1.0, 1.0)
-    white.SetShininess(10.0)
-    sun_material = Material(3.0, 3.0, 3.0)
-    sun_material.SetShininess(50.0)
-    space_material = Material(1.0, 1.0, 1.0)
-    space_material.SetShininess(1.0)
+    white = Material(1.0, 1.0, 1.0); white.SetShininess(10.0)
+    sun_material = Material(3.0, 3.0, 3.0); sun_material.SetShininess(50.0)
+    space_material = Material(1.0, 1.0, 1.0); space_material.SetShininess(1.0)
 
     # shaders
     def make_shader():
@@ -188,24 +134,14 @@ def initialize(win):
         sys.exit()
 
     # animações
-    global g_animation_engines
     g_animation_engines.clear()
-
-    # Sol
-    trf_sun = Transform()
-    g_animation_engines.append(SpinEngine3D(trf_sun, 0.1, glm.vec3(1.5, 1.5, 1.5), glm.vec3(0, 1, 0.1)))
-
-    # Mercúrio
+    trf_sun = Transform(); g_animation_engines.append(SpinEngine3D(trf_sun, 0.1, glm.vec3(1.5, 1.5, 1.5), glm.vec3(0, 1, 0.1)))
     trf_mercury_orbit = Transform(); g_animation_engines.append(OrbitEngine3D(trf_mercury_orbit, 0.8))
     trf_mercury_translate = Transform(); trf_mercury_translate.Translate(2.5, 0, 0)
     trf_mercury_spin = Transform(); g_animation_engines.append(SpinEngine3D(trf_mercury_spin, 0.2, glm.vec3(0.4,0.4,0.4)))
-
-    # Terra
     trf_earth_orbit = Transform(); g_animation_engines.append(OrbitEngine3D(trf_earth_orbit, 0.3))
     trf_earth_translate = Transform(); trf_earth_translate.Translate(5.0, 0, 0)
     trf_earth_spin = Transform(); g_animation_engines.append(SpinEngine3D(trf_earth_spin, 0.2, glm.vec3(0.6,0.6,0.6), glm.vec3(0,1,0.1)))
-
-    # Lua
     trf_moon_orbit = Transform(); g_animation_engines.append(OrbitEngine3D(trf_moon_orbit, -1.2))
     trf_moon_translate = Transform(); trf_moon_translate.Translate(1.5, 0, 0)
     trf_moon_spin = Transform(); g_animation_engines.append(SpinEngine3D(trf_moon_spin, 0.0, glm.vec3(0.3,0.3,0.3)))
@@ -225,44 +161,37 @@ def initialize(win):
                                       Node(None, trf_mercury_translate,
                                            nodes=[
                                                Node(shd_mercury, trf_mercury_spin, [white, mercury_tex], [sphere])
-                                           ]
-                                           )
-                                  ]
-                                  ),
-                             Node(None, trf_earth_orbit, 
+                                           ])
+                                  ]),
+                             Node(None, trf_earth_orbit,
                                   nodes=[
-                                      Node(None, trf_earth_translate, 
+                                      Node(None, trf_earth_translate,
                                            nodes=[
-                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere], name="Earth"), 
-                                               Node(None, trf_moon_orbit, 
+                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere], name="Earth"),
+                                               Node(None, trf_moon_orbit,
                                                     nodes=[
-                                                        Node(None, trf_moon_translate, 
+                                                        Node(None, trf_moon_translate,
                                                              nodes=[
                                                                  Node(shd_moon, trf_moon_spin, [white, moon_tex], [sphere], name="Moon")
-                                                             ]
-                                                             )
-                                                    ]
-                                                    )
-                                           ]
-                                           )
-                                  ]
-                                  )
-                         ]
-                         )
-                ]
-                )
+                                                             ])
+                                                    ])
+                                           ])
+                                  ])
+                         ])
+                ])
     scene = Scene(root)
 
-    # engine da câmera Terra-Lua
-    earth_node = root.FindNodeByName("Earth")
-    moon_node  = root.FindNodeByName("Moon")
+    # Câmera global com arcball
+    camera_global = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)
+    arcball = camera_global.CreateArcball()
+    arcball.Attach(win)
 
-    if earth_node is None or moon_node is None:
-        print("Erro: não foi possível encontrar os nodes da Terra ou Lua!")
-        glfw.terminate()
-        sys.exit()
+    # Câmera da Terra com referência ao nó da Terra
+    earth_node = scene.FindNodeByName("Earth")
+    camera_earth = Camera3D(0.0, 2.0, 5.0)
+    camera_earth.SetReference(earth_node)
 
-    earth_moon_cam_engine = EarthMoonCameraEngine(camera_earth_moon, earth_node, moon_node)
+# === Função main ===
 
 # === Função main ===
 def main():
@@ -279,7 +208,7 @@ def main():
     glfw.set_key_callback(win, keyboard)
     glfw.make_context_current(win)
 
-    print("OpenGL version: ", glGetString(GL_VERSION).decode())
+    print("OpenGL version:", glGetString(GL_VERSION).decode())
 
     initialize(win)
 
