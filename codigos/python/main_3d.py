@@ -19,7 +19,6 @@ from polyoffset import *
 from quad import *
 from cylinder import *
 
-# === Variáveis globais ===
 g_animation_engines = []
 shd_sun = shd_mercury = shd_space = shd_earth = shd_moon = None
 light = None
@@ -32,7 +31,7 @@ camera_global = None
 camera_earth = None
 active_camera = 0  # 0 = global, 1 = Terra
 
-# === Engines de animação ===
+# Engines de animação 
 class OrbitEngine3D:
     def __init__(self, transform_node, speed, axis=glm.vec3(0, 1, 0)):
         self.angle = 0.0
@@ -59,12 +58,12 @@ class SpinEngine3D:
         self.transform.Scale(self.scale.x, self.scale.y, self.scale.z)
         self.transform.Rotate(self.angle, self.axis.x, self.axis.y, self.axis.z)
 
-# === Atualização da cena ===
+
 def update_scene():
     for engine in g_animation_engines:
         engine.update()
 
-# === Renderização ===
+
 def display(win):
     global scene_skybox, scene, camera_global, camera_earth, active_camera
 
@@ -82,7 +81,6 @@ def display(win):
     if scene is not None:
         scene.Render(current_camera)
 
-# === Callback de teclado ===
 def keyboard(win, key, scancode, action, mods):
     global active_camera
     if key == glfw.KEY_Q and action == glfw.PRESS:
@@ -90,7 +88,7 @@ def keyboard(win, key, scancode, action, mods):
     if key == glfw.KEY_C and action == glfw.PRESS:
         active_camera = 1 - active_camera  # alterna entre global e Terra
 
-# === Inicialização da cena ===
+
 def initialize(win):
     global camera_global, camera_earth, light, scene_skybox, scene
     global shd_sun, shd_mercury, shd_space, shd_earth, shd_moon
@@ -116,18 +114,44 @@ def initialize(win):
         return shd
 
     shd_sun = make_shader()
-    shd_earth = make_shader()
     shd_moon = make_shader()
     shd_mercury = make_shader()
     shd_space = make_shader()
 
-    # texturas
+    shd_earth = Shader(light, "world")
+    shd_earth.AttachVertexShader("codigos/python/shaders/ilum_vert/normal_map_vertex.glsl")
+    shd_earth.AttachFragmentShader("codigos/python/shaders/ilum_vert/normal_map_fragment.glsl")
+    shd_earth.Link()
+
+    try:
+        program_id = shd_earth.pid  
+        glUseProgram(program_id)
+        
+        tex_loc = glGetUniformLocation(program_id, "uTexture")
+        glUniform1i(tex_loc, 0) 
+        norm_loc = glGetUniformLocation(program_id, "uNormalMap")
+        glUniform1i(norm_loc, 1) 
+        
+        glUseProgram(0)
+
+    except AttributeError:
+        print("="*50)
+        print("ATENÇÃO: Não achei 'shd_earth.program'.")
+        print("Se o nome do atributo que guarda o ID do shader na sua classe 'Shader' for outro")
+        print("(como _program, program_id, etc.), por favor, ajuste 'shd_earth.program' no código.")
+        print("="*50)
+        glfw.terminate()
+        sys.exit()
+    except Exception as e:
+        print(f"Erro ao definir uniformes de textura: {e}")
     try:
         sun_tex = Texture("uTexture", "codigos/python/images/sun.jpg")
         mercury_tex = Texture("uTexture", "codigos/python/images/mercury.jpg")
         space_tex = Texture("uTexture", "codigos/python/images/space.jpg")
         earth_tex = Texture("uTexture", "codigos/python/images/earth2.jpg")
+        earth_normal_tex = Texture("uNormalMap", "codigos/python/images/earth_normal.jpg")
         moon_tex = Texture("uTexture", "codigos/python/images/moon.jpg")
+        moon_normal_tex = Texture("uNormalMap", "codigos/python/images/moon_normal.jpg")
     except Exception as e:
         print(f"Erro ao carregar texturas: {e}")
         glfw.terminate()
@@ -142,7 +166,7 @@ def initialize(win):
     trf_earth_orbit = Transform(); g_animation_engines.append(OrbitEngine3D(trf_earth_orbit, 0.3))
     trf_earth_translate = Transform(); trf_earth_translate.Translate(5.0, 0, 0)
     trf_earth_spin = Transform(); g_animation_engines.append(SpinEngine3D(trf_earth_spin, 0.2, glm.vec3(0.6,0.6,0.6), glm.vec3(0,1,0.1)))
-    trf_moon_orbit = Transform(); g_animation_engines.append(OrbitEngine3D(trf_moon_orbit, -1.2))
+    trf_moon_orbit = Transform(); g_animation_engines.append(OrbitEngine3D(trf_moon_orbit, -0.4))
     trf_moon_translate = Transform(); trf_moon_translate.Translate(1.5, 0, 0)
     trf_moon_spin = Transform(); g_animation_engines.append(SpinEngine3D(trf_moon_spin, 0.0, glm.vec3(0.3,0.3,0.3)))
 
@@ -167,12 +191,12 @@ def initialize(win):
                                   nodes=[
                                       Node(None, trf_earth_translate,
                                            nodes=[
-                                               Node(shd_earth, trf_earth_spin, [white, earth_tex], [sphere], name="Earth"),
+                                               Node(shd_earth, trf_earth_spin, [white, earth_tex, earth_normal_tex], [sphere], name="Earth"),
                                                Node(None, trf_moon_orbit,
                                                     nodes=[
                                                         Node(None, trf_moon_translate,
                                                              nodes=[
-                                                                 Node(shd_moon, trf_moon_spin, [white, moon_tex], [sphere], name="Moon")
+                                                                 Node(shd_earth, trf_moon_spin, [white, moon_tex, moon_normal_tex], [sphere], name="Moon")
                                                              ])
                                                     ])
                                            ])
@@ -181,19 +205,16 @@ def initialize(win):
                 ])
     scene = Scene(root)
 
-    # Câmera global com arcball
+    # câmera global com arcball
     camera_global = Camera3D(viewer_pos.x, viewer_pos.y, viewer_pos.z)
     arcball = camera_global.CreateArcball()
     arcball.Attach(win)
 
-    # Câmera da Terra com referência ao nó da Terra
+    # câmera da Terra com referência ao nó da Terra
     earth_node = scene.FindNodeByName("Earth")
     camera_earth = Camera3D(0.0, 2.0, 5.0)
     camera_earth.SetReference(earth_node)
 
-# === Função main ===
-
-# === Função main ===
 def main():
     if not glfw.init():
         return
